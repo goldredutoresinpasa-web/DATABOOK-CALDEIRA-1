@@ -203,6 +203,7 @@ body {
 .equipamento-card:hover { transform: translateY(-2px); border-color: #d4af37; }
 .equipamento-card strong { display: block; font-size: 20px; color: #111827; }
 .equipamento-card span { display: block; margin-top: 6px; }
+.equipamento-card .observacoes-card { display: block; margin-top: 6px; }
 
 footer {
   text-align: center;
