@@ -18,11 +18,19 @@ USO:
 """
 
 from pathlib import Path
+import builtins as _builtins
 import pandas as pd
 import qrcode
 import re
 import html
 import unicodedata
+
+# Alguns diagnósticos do editor/linters podem perder a resolução dos builtins
+# em projetos com configuração local incompleta. Mantemos aliases explícitos.
+str = _builtins.str
+FileNotFoundError = _builtins.FileNotFoundError
+ValueError = _builtins.ValueError
+print = _builtins.print
 
 # ALTERAR AQUI depois que o GitHub Pages estiver criado.
 # Exemplo: "https://goldredutoresinpasa-web.github.io/DATABOOK-CALDEIRA-1"
