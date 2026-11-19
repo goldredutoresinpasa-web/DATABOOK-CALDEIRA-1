@@ -1,4 +1,3 @@
-
 """
 GERADOR DE DATA BOOK DIGITAL - EXCEL + GITHUB PAGES
 
@@ -56,12 +55,30 @@ def primeiro_valor_nao_vazio(*valores):
     return ""
 
 
+def normalizar_nome_coluna(nome):
+    nome = unicodedata.normalize("NFKD", str(nome))
+    nome = nome.encode("ascii", "ignore").decode("ascii").casefold()
+    return re.sub(r"[^a-z0-9]", "", nome)
+
+
 def obter_observacoes(dados):
     for coluna, valor in dados.items():
-        nome_coluna = unicodedata.normalize("NFKD", str(coluna))
-        nome_coluna = nome_coluna.encode("ascii", "ignore").decode("ascii").casefold()
-        if re.sub(r"[^a-z0-9]", "", nome_coluna) == "observacoes":
+        if normalizar_nome_coluna(coluna) == "observacoes":
             return limpar_texto(valor)
+    return ""
+
+
+def obter_valor_coluna(dados, *nomes_colunas):
+    nomes_alvos = {normalizar_nome_coluna(nome) for nome in nomes_colunas}
+
+    for coluna, valor in dados.items():
+        if normalizar_nome_coluna(coluna) in nomes_alvos:
+            return limpar_texto(valor)
+
+    for nome in nomes_colunas:
+        if nome in dados:
+            return limpar_texto(dados[nome])
+
     return ""
 
 
@@ -95,7 +112,7 @@ def gerar_html_equipamento(dados):
     tag = limpar_texto(dados.get("TAG", ""))
     tag_pasta = tag_para_pasta(tag)
 
-    foto = link_relativo(dados.get("Foto", ""))
+    foto = link_relativo(obter_valor_coluna(dados, "Foto", "FOTO"))
     if foto:
         bloco_foto = f'<img src="{html.escape(foto)}" alt="Foto do equipamento {html.escape(tag)}" class="foto-equipamento">'
     else:
@@ -118,25 +135,28 @@ def gerar_html_equipamento(dados):
 
     linhas = ""
     for titulo, coluna in campos:
-        valor = obter_observacoes(dados) if coluna == "Observacoes" else limpar_texto(dados.get(coluna, ""))
+        valor = obter_observacoes(dados) if coluna == "Observacoes" else limpar_texto(obter_valor_coluna(dados, coluna, coluna.replace("_", " ")))
         linhas += f"""
         <tr>
           <th>{html.escape(titulo)}</th>
           <td>{html.escape(valor)}</td>
         </tr>"""
 
-    botao_lista = criar_botao("Lista de Peças", dados.get("Lista_Pecas", ""))
-    botao_manual = criar_botao("Manual", dados.get("Manual", ""))
+    botao_lista = criar_botao("Lista de Peças", obter_valor_coluna(dados, "Lista_Pecas", "Lista de Peças", "LISTA DE PEÇAS", "LISTA PECAS"))
+    botao_manual = criar_botao("Manual", obter_valor_coluna(dados, "Manual", "MANUAL"))
 
-    caminho_relatorio = primeiro_valor_nao_vazio(
-        dados.get("RELATÓRIO FINAL", ""),
-        dados.get("RELATORIO FINAL", ""),
-        dados.get("Relatorio Final", ""),
-        dados.get("Certificado", ""),
-        dados.get("CERTIFICADA", ""),
+    caminho_relatorio = obter_valor_coluna(
+        dados,
+        "RELATÓRIO FINAL",
+        "RELATORIO FINAL",
+        "Relatorio Final",
+        "Relatório Final",
+        "Certificado",
+        "CERTIFICADA",
+        "Certificada",
     )
     botao_relatorio = criar_botao("RELATORIO FINAL", caminho_relatorio)
-    botao_fotos = criar_botao("Fotos adicionais", dados.get("Fotos_Adicionais", ""))
+    botao_fotos = criar_botao("Fotos adicionais", obter_valor_coluna(dados, "Fotos_Adicionais", "FOTOS ADICIONAIS"))
 
     link_publicado = BASE_URL.rstrip("/") + "/equipamentos/" + tag_pasta + "/"
 
