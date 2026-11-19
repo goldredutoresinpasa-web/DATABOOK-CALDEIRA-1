@@ -5,6 +5,7 @@ Este script lê dados_equipamentos.xlsx e cria:
 - 1 página HTML por equipamento
 - 1 página inicial com busca
 - 1 QR Code por equipamento
+- Registros repetidos por TAG são consolidados; linhas sem TAG usam a OS como identificador.
 
 INSTALAÇÃO:
 pip install pandas openpyxl qrcode pillow
@@ -68,6 +69,12 @@ def obter_observacoes(dados):
     return ""
 
 
+def obter_numero_os(dados):
+    observacoes = obter_observacoes(dados)
+    correspondencia = re.search(r"\bOS\s*(\d+)\b", observacoes, re.IGNORECASE)
+    return correspondencia.group(1) if correspondencia else ""
+
+
 def obter_valor_coluna(dados, *nomes_colunas):
     nomes_alvos = {normalizar_nome_coluna(nome) for nome in nomes_colunas}
 
@@ -80,6 +87,54 @@ def obter_valor_coluna(dados, *nomes_colunas):
             return limpar_texto(dados[nome])
 
     return ""
+
+
+def preparar_equipamentos(df):
+    registros = [row.to_dict() for _, row in df.iterrows()]
+    grupos_por_os = {}
+
+    for dados in registros:
+        tag = limpar_texto(dados.get("TAG", ""))
+        if tag:
+            numero_os = obter_numero_os(dados)
+            if numero_os:
+                grupos_por_os.setdefault(numero_os, set()).add(tag_para_pasta(tag))
+
+    grupos = {}
+    for indice, dados in enumerate(registros, start=2):
+        tag = limpar_texto(dados.get("TAG", ""))
+        numero_os = obter_numero_os(dados)
+
+        grupos_correspondentes = grupos_por_os.get(numero_os, set())
+        if not tag and len(grupos_correspondentes) == 1:
+            tag = next(iter(grupos_correspondentes))
+        elif not tag and numero_os:
+            tag = f"SEM-TAG-OS{numero_os}"
+        elif not tag:
+            tag = f"SEM-TAG-LINHA-{indice}"
+
+        dados["TAG"] = tag
+        chave = tag_para_pasta(tag)
+        if chave not in grupos:
+            grupos[chave] = dados
+            continue
+
+        registro_existente = grupos[chave]
+        for coluna, valor in dados.items():
+            texto = limpar_texto(valor)
+            if not texto:
+                continue
+
+            if normalizar_nome_coluna(coluna) == "observacoes":
+                observacoes = limpar_texto(registro_existente.get(coluna, ""))
+                linhas_existentes = set(observacoes.splitlines())
+                novas_linhas = [linha for linha in texto.splitlines() if linha not in linhas_existentes]
+                if novas_linhas:
+                    registro_existente[coluna] = "\n".join(filter(None, (observacoes, "\n".join(novas_linhas))))
+            else:
+                registro_existente[coluna] = valor
+
+    return pd.DataFrame(grupos.values())
 
 
 def tag_para_pasta(tag):
@@ -390,6 +445,8 @@ def main():
     if "TAG" not in df.columns:
         raise ValueError("A planilha precisa ter uma coluna chamada TAG.")
 
+    df = preparar_equipamentos(df)
+
     PASTA_EQUIPAMENTOS.mkdir(exist_ok=True)
     PASTA_QRCODES.mkdir(parents=True, exist_ok=True)
 
@@ -397,8 +454,6 @@ def main():
 
     for _, row in df.iterrows():
         tag = limpar_texto(row.get("TAG", ""))
-        if not tag:
-            continue
 
         tag_pasta = tag_para_pasta(tag)
         pasta = PASTA_EQUIPAMENTOS / tag_pasta
